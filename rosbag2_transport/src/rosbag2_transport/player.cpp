@@ -330,7 +330,7 @@ private:
   mutable std::future<void> storage_loading_future_;
   std::atomic_bool load_storage_content_{true};
   std::unordered_map<std::string, rclcpp::QoS> topic_qos_profile_overrides_;
-  std::unique_ptr<rosbag2_cpp::PlayerClock> clock_;
+  std::unique_ptr<rosbag2_cpp::TimeControllerClock> clock_;
   std::shared_ptr<rclcpp::TimerBase> clock_publish_timer_;
   std::mutex skip_message_in_main_play_loop_mutex_;
   bool skip_message_in_main_play_loop_ RCPPUTILS_TSA_GUARDED_BY(
@@ -641,8 +641,8 @@ void PlayerImpl::stop()
     }
 
     if (clock_->is_paused()) {
-      clock_->resume();  // Temporary resume clock to force wakeup in clock_->sleep_until(time)
-      clock_->pause();   // Return in pause mode to preserve original state of the player
+      // Wake up the clock in case it's in a sleep_until(time) call
+      clock_->wakeup();
     }
     // Note: Don't clean up message queue here. It will be cleaned up automatically in
     // playback thread after finishing play_messages_from_queue();
@@ -739,10 +739,8 @@ bool PlayerImpl::play_next()
 
   // Wait for play next to be done, and then return the result
   std::unique_lock<std::mutex> lk(finished_play_next_mutex_);
-  // Temporarily resume clock to force wakeup in clock_->sleep_until(time),
-  // then return in pause mode to preserve original state of the player
-  clock_->resume();
-  clock_->pause();
+  // Wake up the clock in case it's in a sleep_until(time) call
+  clock_->wakeup();
   finished_play_next_ = false;
   finished_play_next_cv_.wait(lk, [this] {return finished_play_next_.load();});
   play_next_ = false;
@@ -1044,9 +1042,8 @@ void PlayerImpl::play_messages_from_queue()
     while (!stop_playback_ && is_paused() && !play_next_.load() && rclcpp::ok()) {
       clock_->sleep_until(clock_->now());
     }
-    // If we ran out of messages and are not in pause state, it means we're done playing,
-    // unless play_next() is resuming and pausing the clock in order to wake us up
-    if (!is_paused() && !play_next_.load()) {
+    // If we ran out of messages and are not in pause state, it means we're done playing
+    if (!is_paused()) {
       break;
     }
 
