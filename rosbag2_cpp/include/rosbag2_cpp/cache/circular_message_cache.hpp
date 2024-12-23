@@ -20,6 +20,7 @@
 #include <memory>
 #include <mutex>
 #include <string>
+#include <unordered_map>
 
 #include "rcpputils/thread_safety_annotations.hpp"
 
@@ -28,6 +29,7 @@
 #include "rosbag2_cpp/cache/cache_buffer_interface.hpp"
 #include "rosbag2_cpp/visibility_control.hpp"
 
+#include "rosbag2_storage/rosbag2_storage/bag_metadata.hpp"
 #include "rosbag2_storage/serialized_bag_message.hpp"
 
 // This is necessary because of using stl types here. It is completely safe, because
@@ -52,7 +54,9 @@ class ROSBAG2_CPP_PUBLIC CircularMessageCache
   : public MessageCacheInterface
 {
 public:
-  explicit CircularMessageCache(size_t max_buffer_size);
+  explicit CircularMessageCache(
+    size_t max_buffer_size, const std::unordered_map<std::string,
+    rosbag2_storage::TopicInformation> & topics_names_to_info);
 
   ~CircularMessageCache() override;
 

@@ -72,8 +72,9 @@ public:
 TEST_F(CircularMessageCacheTest, circular_message_cache_overwrites_old) {
   const unsigned message_count = 100;
 
+  std::unordered_map<std::string, rosbag2_storage::TopicInformation> topics_names_to_info;
   auto circular_message_cache = std::make_shared<rosbag2_cpp::cache::CircularMessageCache>(
-    cache_size_);
+    cache_size_, topics_names_to_info);
 
   for (unsigned i = 0; i < message_count; ++i) {
     auto msg = make_test_msg();
@@ -109,8 +110,9 @@ TEST_F(CircularMessageCacheTest, circular_message_cache_overwrites_old) {
 TEST_F(CircularMessageCacheTest, circular_message_cache_ensure_empty) {
   const unsigned message_count = 100;
 
+  std::unordered_map<std::string, rosbag2_storage::TopicInformation> topics_names_to_info;
   auto circular_message_cache = std::make_shared<rosbag2_cpp::cache::CircularMessageCache>(
-    cache_size_);
+    cache_size_, topics_names_to_info);
 
   for (unsigned i = 0; i < message_count; ++i) {
     auto msg = make_test_msg();

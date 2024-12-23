@@ -147,7 +147,7 @@ void SequentialWriter::open(
   if (use_cache_) {
     if (storage_options.snapshot_mode) {
       message_cache_ = std::make_shared<rosbag2_cpp::cache::CircularMessageCache>(
-        storage_options.max_cache_size);
+        storage_options.max_cache_size, topics_names_to_info_);
     } else {
       message_cache_ = std::make_shared<rosbag2_cpp::cache::MessageCache>(
         storage_options.max_cache_size);
