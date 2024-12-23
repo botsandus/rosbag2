@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include <algorithm>
 #include <deque>
 #include <memory>
 #include <vector>
@@ -25,8 +26,11 @@ namespace rosbag2_cpp
 namespace cache
 {
 
-MessageCacheCircularBuffer::MessageCacheCircularBuffer(size_t max_cache_size)
-: max_bytes_size_(max_cache_size)
+MessageCacheCircularBuffer::MessageCacheCircularBuffer(
+  size_t max_cache_size,
+  const std::unordered_map<std::string,
+  rosbag2_storage::TopicInformation> & topics_names_to_info)
+: max_bytes_size_(max_cache_size), topics_names_to_info_(topics_names_to_info)
 {
 }
 
@@ -38,10 +42,37 @@ bool MessageCacheCircularBuffer::push(CacheBufferInterface::buffer_element_t msg
     return false;
   }
 
-  // Remove any old items until there is room for new message
+  // Remove any old items that is no transient local until there is room for new message
   while (buffer_bytes_size_ > (max_bytes_size_ - msg->serialized_data->buffer_length)) {
-    buffer_bytes_size_ -= buffer_.front()->serialized_data->buffer_length;
-    buffer_.pop_front();
+    auto is_not_transient_local = [this](buffer_element_t buffer_element)
+      {
+        auto it_matching_topic_name = topics_names_to_info_.find(buffer_element->topic_name);
+        if (it_matching_topic_name != topics_names_to_info_.end()) {
+          return it_matching_topic_name->second.topic_metadata.offered_qos_profiles.find(
+            "durability: 1") == std::string::npos;
+        }
+        return true;
+      };
+
+    // Find the first element which is non transient local
+    auto it_first_not_transient = std::find_if(
+      buffer_.begin(),
+      buffer_.end(), is_not_transient_local);
+
+    size_t position_first_not_transient = std::distance(buffer_.begin(), it_first_not_transient);
+
+    // Remove the first non transient msg if found and if older transient messages account for less
+    // than 10% of the total number of messages in the buffer
+    // else pop_front
+    if (it_first_not_transient != buffer_.end() &&
+      (position_first_not_transient + 1) < buffer_.size() / 10)
+    {
+      buffer_bytes_size_ -= it_first_not_transient->get()->serialized_data->buffer_length;
+      buffer_.erase(it_first_not_transient);
+    } else {
+      buffer_.pop_front();
+      buffer_bytes_size_ -= buffer_.front()->serialized_data->buffer_length;
+    }
   }
   // Add new message to end of buffer
   buffer_bytes_size_ += msg->serialized_data->buffer_length;
