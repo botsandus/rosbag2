@@ -18,9 +18,12 @@
 #include <deque>
 #include <memory>
 #include <vector>
+#include <unordered_map>
+#include <string>
 
 #include "rosbag2_cpp/visibility_control.hpp"
 #include "rosbag2_cpp/cache/cache_buffer_interface.hpp"
+#include "rosbag2_storage/rosbag2_storage/bag_metadata.hpp"
 #include "rosbag2_storage/serialized_bag_message.hpp"
 
 // This is necessary because of using stl types here. It is completely safe, because
@@ -51,7 +54,9 @@ class ROSBAG2_CPP_PUBLIC MessageCacheCircularBuffer
 public:
   // Delete default constructor since max_cache_size is required
   MessageCacheCircularBuffer() = delete;
-  explicit MessageCacheCircularBuffer(size_t max_cache_size);
+  explicit MessageCacheCircularBuffer(
+    size_t max_cache_size, const std::unordered_map<std::string,
+    rosbag2_storage::TopicInformation> & topics_names_to_info);
 
   /**
   * If buffer size has some space left, we push the message regardless of its size,
@@ -73,6 +78,7 @@ private:
   std::vector<CacheBufferInterface::buffer_element_t> msg_vector_;
   size_t buffer_bytes_size_ {0u};
   const size_t max_bytes_size_;
+  const std::unordered_map<std::string, rosbag2_storage::TopicInformation> & topics_names_to_info_;
 };
 
 }  // namespace cache
