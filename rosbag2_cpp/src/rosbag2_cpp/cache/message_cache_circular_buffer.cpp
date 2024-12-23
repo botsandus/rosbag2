@@ -48,8 +48,13 @@ bool MessageCacheCircularBuffer::push(CacheBufferInterface::buffer_element_t msg
       {
         auto it_matching_topic_name = topics_names_to_info_.find(buffer_element->topic_name);
         if (it_matching_topic_name != topics_names_to_info_.end()) {
-          return it_matching_topic_name->second.topic_metadata.offered_qos_profiles.find(
-            "durability: 1") == std::string::npos;
+          bool transient_local_found = false;
+          for (auto & qos : it_matching_topic_name->second.topic_metadata.offered_qos_profiles) {
+            if (qos.durability() == rclcpp::DurabilityPolicy::TransientLocal) {
+              transient_local_found = true;
+            }
+          }
+          return !transient_local_found;
         }
         return true;
       };

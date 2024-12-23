@@ -29,7 +29,7 @@
 #include "rosbag2_cpp/cache/cache_buffer_interface.hpp"
 #include "rosbag2_cpp/visibility_control.hpp"
 
-#include "rosbag2_storage/rosbag2_storage/bag_metadata.hpp"
+#include "rosbag2_storage/bag_metadata.hpp"
 #include "rosbag2_storage/serialized_bag_message.hpp"
 
 // This is necessary because of using stl types here. It is completely safe, because
