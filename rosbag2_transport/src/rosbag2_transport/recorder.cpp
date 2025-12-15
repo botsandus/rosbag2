@@ -100,7 +100,8 @@ public:
   rosbag2_storage::StorageOptions storage_options_;
   rosbag2_transport::RecordOptions record_options_;
   std::unordered_map<std::string, std::shared_ptr<rclcpp::SubscriptionBase>> subscriptions_;
-  std::map<std::pair<std::string, std::string>, rclcpp::SerializedMessage> transient_local_messages_;
+  std::map<std::pair<std::string, std::string>,
+    rclcpp::SerializedMessage> transient_local_messages_;
 
 private:
   void topics_discovery() noexcept;
@@ -358,7 +359,9 @@ void RecorderImpl::record()
   callbacks.write_split_callback =
     [this](rosbag2_cpp::bag_events::BagSplitInfo & info) {
       event_notifier_->on_bag_split_in_recorder(info);
-      if (writer_ && record_options_.repeated_transient_local && !transient_local_messages_.empty()) {
+      if (writer_ && record_options_.repeated_transient_local &&
+        !transient_local_messages_.empty())
+      {
         for (const auto & msg : transient_local_messages_) {
           auto serialized_msg = std::make_shared<rosbag2_storage::SerializedBagMessage>();
           serialized_msg->topic_name = msg.first.first;

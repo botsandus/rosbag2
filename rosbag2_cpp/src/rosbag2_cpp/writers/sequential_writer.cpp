@@ -367,7 +367,7 @@ void SequentialWriter::execute_bag_split_callbacks(
   info->closed_file = closed_file;
   info->opened_file = opened_file;
   callback_manager_.execute_callbacks(bag_events::BagEvent::WRITE_SPLIT, info);
-  
+
   // Write any messages that the callback populated for republishing
   if (!info->messages_to_republish.empty()) {
     for (const auto & msg : info->messages_to_republish) {
