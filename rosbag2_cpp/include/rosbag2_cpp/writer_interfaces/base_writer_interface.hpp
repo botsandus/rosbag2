@@ -59,6 +59,16 @@ public:
   virtual bool take_snapshot() = 0;
 
   /**
+   * Mark a topic as using transient_local durability for snapshot mode preservation.
+   * Default implementation does nothing for writers that don't support it.
+   * \param topic_name The name of the topic using transient_local durability
+   */
+  virtual void mark_topic_as_transient_local(const std::string & topic_name)
+  {
+    (void)topic_name;  // Suppress unused parameter warning
+  }
+
+  /**
    * Close the current bagfile and opens the next bagfile.
    */
   virtual void split_bagfile() = 0;
