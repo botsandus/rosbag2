@@ -304,6 +304,18 @@ std::string SequentialWriter::format_storage_uri(
 
 void SequentialWriter::switch_to_next_storage()
 {
+  // Write transient local messages at the END of current bag before closing
+  if (pending_messages_to_republish_ && !pending_messages_to_republish_->empty()) {
+    for (const auto & msg : *pending_messages_to_republish_) {
+      if (use_cache_) {
+        message_cache_->push(msg);
+      } else {
+        storage_->write(get_writeable_message(msg));
+      }
+    }
+    pending_messages_to_republish_->clear();
+  }
+
   // consume remaining message cache
   if (use_cache_) {
     cache_consumer_->stop();
@@ -368,15 +380,10 @@ void SequentialWriter::execute_bag_split_callbacks(
   info->opened_file = opened_file;
   callback_manager_.execute_callbacks(bag_events::BagEvent::WRITE_SPLIT, info);
 
-  // Write any messages that the callback populated for republishing
+  // Store messages to republish - they'll be written at the END of the next bag before closing
   if (!info->messages_to_republish.empty()) {
-    for (const auto & msg : info->messages_to_republish) {
-      if (use_cache_) {
-        message_cache_->push(msg);
-      } else {
-        storage_->write(get_writeable_message(msg));
-      }
-    }
+    pending_messages_to_republish_ = std::make_shared<std::vector<std::shared_ptr<rosbag2_storage::SerializedBagMessage>>>(
+      info->messages_to_republish);
   }
 }
 

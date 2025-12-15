@@ -153,6 +153,9 @@ protected:
   std::shared_ptr<rosbag2_cpp::cache::MessageCacheInterface> message_cache_;
   std::unique_ptr<rosbag2_cpp::cache::CacheConsumer> cache_consumer_;
 
+  /// Messages to republish at the end of the next bag file (e.g., transient local messages)
+  std::shared_ptr<std::vector<std::shared_ptr<rosbag2_storage::SerializedBagMessage>>> pending_messages_to_republish_;
+
   std::string split_bagfile_local(bool execute_callbacks = true);
 
   void execute_bag_split_callbacks(
