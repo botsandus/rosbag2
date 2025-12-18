@@ -172,4 +172,10 @@ void Writer::add_event_callbacks(bag_events::WriterEventCallbacks & callbacks)
   writer_impl_->add_event_callbacks(callbacks);
 }
 
+void Writer::mark_topic_as_transient_local(const std::string & topic_name)
+{
+  std::lock_guard<std::mutex> writer_lock(writer_mutex_);
+  writer_impl_->mark_topic_as_transient_local(topic_name);
+}
+
 }  // namespace rosbag2_cpp
