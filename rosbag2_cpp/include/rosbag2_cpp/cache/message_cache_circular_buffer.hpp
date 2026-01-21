@@ -63,6 +63,14 @@ public:
   */
   bool push(CacheBufferInterface::buffer_element_t msg) override;
 
+  /**
+  * \brief Pushes a SerializedBagMessage to the front of the cache buffer.
+  * \details Prepends message without size checking - caller must ensure total size is acceptable.
+  * \param msg SerializedBagMessage to add to the front of the buffer.
+  * \return True if message was successfully pushed. Returns false if msg is null.
+  */
+  bool push_front(CacheBufferInterface::buffer_element_t msg);
+
   /// Clear buffer
   void clear() override;
 
