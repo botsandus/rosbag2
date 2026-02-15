@@ -371,6 +371,9 @@ std::string SequentialWriter::split_bagfile_local(bool execute_callbacks)
 {
   auto closed_file = storage_->get_relative_file_path();
   switch_to_next_storage();
+  // In non-snapshot mode, prepend cached transient-local messages to the new bag file so that
+  // transient-local topics appear in every split. In snapshot mode the merge happens
+  // later inside write_messages() where the circular buffer is flushed together with the snapshot.
   if (!storage_options_.snapshot_mode) {
     prepend_transient_local_messages(last_received_timestamp_, last_sent_timestamp_);
   }
@@ -614,7 +617,9 @@ void SequentialWriter::write_messages(
     merged_messages.reserve(messages.size() + transient_messages.size());
 
     for (const auto & transient_message : transient_messages) {
-      if (transient_message->recv_timestamp < snapshot_earliest_recv_timestamp) {
+      // Use <= to avoid silently dropping a transient-local message whose timestamp
+      // happens to exactly equal the earliest snapshot message.
+      if (transient_message->recv_timestamp <= snapshot_earliest_recv_timestamp) {
         merged_messages.emplace_back(
           copy_with_timestamps(
             transient_message,
@@ -626,15 +631,7 @@ void SequentialWriter::write_messages(
     merged_messages.insert(merged_messages.end(), messages.begin(), messages.end());
     std::stable_sort(
       merged_messages.begin(), merged_messages.end(),
-      [](const auto & left, const auto & right) {
-        if (left->recv_timestamp != right->recv_timestamp) {
-          return left->recv_timestamp < right->recv_timestamp;
-        }
-        if (left->send_timestamp != right->send_timestamp) {
-          return left->send_timestamp < right->send_timestamp;
-        }
-        return left->topic_name < right->topic_name;
-      });
+      &rosbag2_cpp::cache::TransientLocalMessagesCache::message_timestamp_less);
     messages_to_write = &merged_messages;
   }
 
