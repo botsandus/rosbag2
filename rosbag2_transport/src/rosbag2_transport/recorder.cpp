@@ -911,6 +911,10 @@ rclcpp::QoS RecorderImpl::subscription_qos_for_topic(const std::string & topic_n
     return topic_qos_profile_overrides_.at(topic_name);
   }
 
+  // When the user requests transient-local replay for a topic, force durability to
+  // TRANSIENT_LOCAL so the subscription receives the last published value even if it
+  // subscribes after the publisher.  This intentionally overrides whatever durability
+  // the publisher advertises.
   if (record_options_.repeat_transient_local_messages.count(topic_name) > 0) {
     auto qos = rosbag2_storage::Rosbag2QoS::adapt_request_to_offers(
       topic_name, node->get_publishers_info_by_topic(topic_name));
