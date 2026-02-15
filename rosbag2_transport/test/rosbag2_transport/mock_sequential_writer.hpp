@@ -55,6 +55,23 @@ public:
     topics_.emplace(topic_with_type.name, std::make_pair(topic_with_type, message_definition));
   }
 
+  void create_transient_local_topic(
+    const rosbag2_storage::TopicMetadata & topic_with_type,
+    size_t num_last_messages) override
+  {
+    transient_local_topic_depths_[topic_with_type.name] = num_last_messages;
+    create_topic(topic_with_type);
+  }
+
+  void create_transient_local_topic(
+    const rosbag2_storage::TopicMetadata & topic_with_type,
+    size_t num_last_messages,
+    const rosbag2_storage::MessageDefinition & message_definition) override
+  {
+    transient_local_topic_depths_[topic_with_type.name] = num_last_messages;
+    create_topic(topic_with_type, message_definition);
+  }
+
   void remove_topic(const rosbag2_storage::TopicMetadata & topic_with_type) override
   {
     (void) topic_with_type;
@@ -173,6 +190,12 @@ public:
     return storage_options_;
   }
 
+  std::unordered_map<std::string, size_t> transient_local_topic_depths() const
+  {
+    std::lock_guard<std::mutex> lock(messages_mutex_);
+    return transient_local_topic_depths_;
+  }
+
 private:
   std::unordered_map<
     std::string,
@@ -181,6 +204,7 @@ private:
   std::vector<std::shared_ptr<const rosbag2_storage::SerializedBagMessage>> messages_;
   std::vector<std::shared_ptr<const rosbag2_storage::SerializedBagMessage>> snapshot_buffer_;
   std::unordered_map<std::string, size_t> messages_per_topic_;
+  std::unordered_map<std::string, size_t> transient_local_topic_depths_;
   size_t messages_per_file_ = 0;
   mutable std::mutex messages_mutex_;
   rosbag2_cpp::bag_events::EventCallbackManager callback_manager_;
