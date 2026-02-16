@@ -49,10 +49,16 @@ void CircularMessageCache::push(std::shared_ptr<const rosbag2_storage::Serialize
 void CircularMessageCache::push_transient_local(
   std::shared_ptr<const rosbag2_storage::SerializedBagMessage> msg)
 {
-  std::lock_guard<std::mutex> cache_lock(transient_local_buffer_mutex_);
-  // Store/update the latest message for this topic
-  // This ensures we always have the most recent state for transient local topics
-  transient_local_messages_[msg->topic_name] = std::move(msg);
+  // Push to the main circular buffer so all messages are recorded normally
+  {
+    std::lock_guard<std::mutex> cache_lock(producer_buffer_mutex_);
+    (void)producer_buffer_->push(msg);
+  }
+  // Also keep track of the latest message per topic for prepending at snapshot/split time
+  {
+    std::lock_guard<std::mutex> cache_lock(transient_local_buffer_mutex_);
+    transient_local_messages_[msg->topic_name] = std::move(msg);
+  }
 }
 
 std::shared_ptr<CacheBufferInterface> CircularMessageCache::get_consumer_buffer()
