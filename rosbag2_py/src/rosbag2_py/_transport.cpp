@@ -22,6 +22,7 @@
 #include <vector>
 
 #include "keyboard_handler/keyboard_handler.hpp"
+#include "rclcpp/experimental/executors/events_executor/events_executor.hpp"
 #include "rosbag2_storage/storage_options.hpp"
 #include "rosbag2_storage/yaml.hpp"
 #include "rosbag2_transport/bag_rewrite.hpp"
@@ -604,7 +605,7 @@ public:
       // We already have an executor spinning
       return;
     }
-    exec_ = std::make_unique<rclcpp::executors::SingleThreadedExecutor>();
+    exec_ = std::make_unique<rclcpp::experimental::executors::EventsExecutor>();
     exec_->add_node(recorder_);
     spin_thread_ = std::thread(
       [this]() {
@@ -784,7 +785,7 @@ protected:
 
   std::shared_ptr<rosbag2_transport::Recorder> recorder_;
   std::mutex spin_thread_mutex_;
-  std::unique_ptr<rclcpp::executors::SingleThreadedExecutor> exec_{nullptr};
+  std::unique_ptr<rclcpp::experimental::executors::EventsExecutor> exec_{nullptr};
   std::thread spin_thread_;
 };
 
