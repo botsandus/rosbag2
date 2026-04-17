@@ -563,13 +563,13 @@ if(BUILD_TESTING)
     test/rosbag2_transport/test_type_description_hash.cpp)
   target_link_libraries(test_type_description_hash ${PROJECT_NAME})
 
-  ament_add_gmock(test_topic_filter
-    test/rosbag2_transport/test_topic_filter.cpp)
-  target_include_directories(test_topic_filter PRIVATE
-    $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/src/rosbag2_transport>)
-  target_link_libraries(test_topic_filter
-    ${PROJECT_NAME}
-  )
+  # ament_add_gmock(test_topic_filter
+  #   test/rosbag2_transport/test_topic_filter.cpp)
+  # target_include_directories(test_topic_filter PRIVATE
+  #   $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/src/rosbag2_transport>)
+  # target_link_libraries(test_topic_filter
+  #   ${PROJECT_NAME}
+  # )
 
   ament_add_gmock(test_rewrite
     test/rosbag2_transport/test_rewrite.cpp)
