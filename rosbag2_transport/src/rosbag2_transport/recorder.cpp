@@ -635,12 +635,7 @@ void RecorderImpl::stop()
   }
 
   stop_discovery();
-  // Explicitly disable all subscription's callbacks to avoid UB and receiving new messages on
-  // deleted subscriptions. Note: The callbacks propagated to the executor and may still be in the
-  // executor's queue, but they will no longer be called after this point.
-  for (auto & [_, subscription] : subscriptions_) {
-    subscription->disable_callbacks();
-  }
+  pause();
   subscriptions_.clear();
   writer_->close();  // Call writer->close() to finalize current bag file and write metadata
   {  // Clear pending split request if any
@@ -707,7 +702,7 @@ bool RecorderImpl::record(const std::string & uri)
       "No output serialization format specified, using rmw serialization format. '%s'.",
       record_options_.output_serialization_format.c_str());
   }
-
+  subscriptions_.clear();
   event_notifier_->reset_total_num_messages_lost_in_transport();
   event_notifier_->reset_total_num_messages_lost_in_recorder();
 
