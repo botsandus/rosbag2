@@ -1,0 +1,12 @@
+# Atomically set the list of topics to record.
+# Replaces the current topic include/exclude lists and reconciles subscriptions.
+string[] topics
+---
+# Topics that were successfully subscribed.
+string[] subscribed_topics
+# Topics that were not found on the graph.
+string[] unavailable_topics
+# Return code. Returns 0 on success, 1 on error.
+int32 return_code
+# Error string. Empty if no error occurred.
+string error_string

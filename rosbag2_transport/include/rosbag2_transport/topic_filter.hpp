@@ -77,6 +77,21 @@ public:
   std::unordered_map<std::string, std::string> filter_topics(
     const std::map<std::string, std::vector<std::string>> & all_topic_names_and_types);
 
+  /// @brief Add a topic to the runtime exclude list.
+  /// @details The topic will be filtered out by subsequent calls to filter_topics().
+  /// @param topic_name The name of the topic to exclude.
+  void exclude_topic(const std::string & topic_name);
+
+  /// @brief Remove a topic from the runtime exclude list.
+  /// @details The topic will no longer be filtered out by exclude_topics matching.
+  /// @param topic_name The name of the topic to re-include.
+  void include_topic(const std::string & topic_name);
+
+  /// @brief Atomically replace the set of topics to record.
+  /// @details Replaces the include list, clears all exclude/regex filters, and invalidates cache.
+  /// @param topics The new set of topic names to record.
+  void set_topics(const std::vector<std::string> & topics);
+
 protected:
   /// \brief Check if the topic is selected by include/exclude lists or regexes
   /// @param topic_name - the name of the topic to check

@@ -1,0 +1,11 @@
+# Unsubscribe from topics and stop recording them.
+# Unsubscribed topics will be excluded from future discovery.
+# Topics not currently subscribed will be ignored.
+string[] topics
+---
+# Topics that were successfully unsubscribed.
+string[] unsubscribed_topics
+# Return code. Returns 0 on success, 1 on error.
+int32 return_code
+# Error string. Empty if no error occurred.
+string error_string

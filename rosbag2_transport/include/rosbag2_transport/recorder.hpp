@@ -36,11 +36,14 @@
 #include "rosbag2_interfaces/srv/pause.hpp"
 #include "rosbag2_interfaces/srv/record.hpp"
 #include "rosbag2_interfaces/srv/resume.hpp"
+#include "rosbag2_interfaces/srv/set_topics.hpp"
 #include "rosbag2_interfaces/srv/snapshot.hpp"
 #include "rosbag2_interfaces/srv/split_bagfile.hpp"
 #include "rosbag2_interfaces/srv/start_discovery.hpp"
 #include "rosbag2_interfaces/srv/stop_discovery.hpp"
 #include "rosbag2_interfaces/srv/stop.hpp"
+#include "rosbag2_interfaces/srv/subscribe_topics.hpp"
+#include "rosbag2_interfaces/srv/unsubscribe_topics.hpp"
 
 #include "rosbag2_interfaces/msg/write_split_event.hpp"
 
@@ -233,6 +236,30 @@ public:
   /// all buffers to the disk and close writer. The record(uri) can be called again after stop().
   ROSBAG2_TRANSPORT_PUBLIC
   void stop();
+
+  /// @brief Subscribe to a topic by name and start recording it.
+  /// @details Discovers the topic type from the ROS graph, creates a subscription with
+  /// appropriate QoS, and registers the topic in the writer. If the topic was previously
+  /// unsubscribed, it will be removed from the exclusion list.
+  /// @param topic_name The name of the topic to subscribe to.
+  /// @return true if subscribed successfully, false if already subscribed or topic not found.
+  ROSBAG2_TRANSPORT_PUBLIC
+  bool subscribe_topic(const std::string & topic_name);
+
+  /// @brief Unsubscribe from a topic and stop recording it.
+  /// @details Removes the subscription from the internal subscriptions map. The topic will
+  /// not be re-subscribed by discovery until subscribe_topic is explicitly called for it.
+  /// @param topic_name The name of the topic to unsubscribe from.
+  /// @return true if the topic was unsubscribed, false if it was not currently subscribed.
+  ROSBAG2_TRANSPORT_PUBLIC
+  bool unsubscribe_topic(const std::string & topic_name);
+
+  /// @brief Atomically set the desired topics to record.
+  /// @details Replaces the topic filter, unsubscribes from topics not in the new set,
+  /// and subscribes to new topics found on the graph.
+  /// @param topics The complete set of topic names to record.
+  ROSBAG2_TRANSPORT_PUBLIC
+  void set_topics(const std::vector<std::string> & topics);
 
   ROSBAG2_TRANSPORT_PUBLIC
   const std::unordered_set<std::string> &

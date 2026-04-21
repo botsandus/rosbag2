@@ -150,6 +150,33 @@ std::unordered_map<std::string, std::string> TopicFilter::filter_topics(
   return filtered_topics;
 }
 
+void TopicFilter::exclude_topic(const std::string & topic_name)
+{
+  auto & exclude_list = record_options_.exclude_topics;
+  if (std::find(exclude_list.begin(), exclude_list.end(), topic_name) == exclude_list.end()) {
+    exclude_list.push_back(topic_name);
+  }
+  topic_selected_by_lists_or_regex_cache_.clear();
+}
+
+void TopicFilter::include_topic(const std::string & topic_name)
+{
+  auto & exclude_list = record_options_.exclude_topics;
+  exclude_list.erase(
+    std::remove(exclude_list.begin(), exclude_list.end(), topic_name), exclude_list.end());
+  topic_selected_by_lists_or_regex_cache_.clear();
+}
+
+void TopicFilter::set_topics(const std::vector<std::string> & topics)
+{
+  record_options_.topics = topics;
+  record_options_.all_topics = false;
+  record_options_.exclude_topics.clear();
+  record_options_.regex.clear();
+  record_options_.exclude_regex.clear();
+  topic_selected_by_lists_or_regex_cache_.clear();
+}
+
 bool TopicFilter::topic_selected_by_lists_or_regex(
   const std::string & topic_name,
   const std::string & topic_type)

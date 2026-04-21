@@ -38,7 +38,10 @@
 #include "rosbag2_cpp/bag_events.hpp"
 #include "rosbag2_cpp/service_utils.hpp"
 #include "rosbag2_cpp/writer.hpp"
+#include "rosbag2_interfaces/srv/set_topics.hpp"
 #include "rosbag2_interfaces/srv/snapshot.hpp"
+#include "rosbag2_interfaces/srv/subscribe_topics.hpp"
+#include "rosbag2_interfaces/srv/unsubscribe_topics.hpp"
 #include "rosbag2_storage/qos.hpp"
 #include "logging.hpp"
 #include "rosbag2_transport/config_options_from_node_params.hpp"
@@ -165,6 +168,27 @@ public:
   /// @return true if split was successful, false if recording is not active.
   /// \throws std::exception if underlying writer fails to split the bagfile.
   bool split_bagfile();
+
+  /// @brief Subscribe to a topic by name and start recording it.
+  /// @details Discovers the topic type from the ROS graph, creates a subscription with
+  /// appropriate QoS, and registers the topic in the writer. If the topic was previously
+  /// unsubscribed, it will be removed from the exclusion list.
+  /// @param topic_name The name of the topic to subscribe to.
+  /// @return true if subscribed successfully, false if already subscribed or topic not found.
+  bool subscribe_topic(const std::string & topic_name);
+
+  /// @brief Unsubscribe from a topic and stop recording it.
+  /// @details Removes the subscription from the internal map. The topic will not be
+  /// re-subscribed by discovery unless subscribe_topic is explicitly called for it.
+  /// @param topic_name The name of the topic to unsubscribe from.
+  /// @return true if the topic was unsubscribed, false if it was not found.
+  bool unsubscribe_topic(const std::string & topic_name);
+
+  /// @brief Atomically set the desired topics to record.
+  /// @details Replaces the topic filter include list, unsubscribes from topics not in the
+  /// new set, and subscribes to new topics found on the graph.
+  /// @param topics The complete set of topic names to record.
+  void set_topics(const std::vector<std::string> & topics);
 
   /// Get a const reference to the underlying rosbag2 writer.
   const rosbag2_cpp::Writer & get_writer_handle();
@@ -479,6 +503,9 @@ private:
   rclcpp::Service<rosbag2_interfaces::srv::SplitBagfile>::SharedPtr srv_split_bagfile_;
   rclcpp::Service<rosbag2_interfaces::srv::StartDiscovery>::SharedPtr srv_start_discovery_;
   rclcpp::Service<rosbag2_interfaces::srv::Stop>::SharedPtr srv_stop_;
+  rclcpp::Service<rosbag2_interfaces::srv::SetTopics>::SharedPtr srv_set_topics_;
+  rclcpp::Service<rosbag2_interfaces::srv::SubscribeTopics>::SharedPtr srv_subscribe_topics_;
+  rclcpp::Service<rosbag2_interfaces::srv::UnsubscribeTopics>::SharedPtr srv_unsubscribe_topics_;
   rclcpp::Service<rosbag2_interfaces::srv::StopDiscovery>::SharedPtr srv_stop_discovery_;
 
   std::mutex start_stop_transition_mutex_;
@@ -1045,6 +1072,73 @@ void RecorderImpl::create_control_services()
       const std::shared_ptr<rosbag2_interfaces::srv::IsPaused::Response> response)
     {
       response->paused = is_paused();
+    });
+
+  srv_set_topics_ = node->create_service<rosbag2_interfaces::srv::SetTopics>(
+    "~/set_topics",
+    [this](
+      const std::shared_ptr<rmw_request_id_t>/* request_header */,
+      const std::shared_ptr<rosbag2_interfaces::srv::SetTopics::Request> request,
+      std::shared_ptr<rosbag2_interfaces::srv::SetTopics::Response> response)
+    {
+      try {
+        this->set_topics(request->topics);
+        for (const auto & topic_name : request->topics) {
+          if (subscriptions_.find(topic_name) != subscriptions_.end()) {
+            response->subscribed_topics.push_back(topic_name);
+          } else {
+            response->unavailable_topics.push_back(topic_name);
+          }
+        }
+        set_service_success(response);
+      } catch (const std::exception & e) {
+        RCLCPP_ERROR(node->get_logger(), "Error during SetTopics request: %s", e.what());
+        set_service_error(response, e.what());
+      }
+    });
+
+  srv_subscribe_topics_ = node->create_service<rosbag2_interfaces::srv::SubscribeTopics>(
+    "~/subscribe_topics",
+    [this](
+      const std::shared_ptr<rmw_request_id_t>/* request_header */,
+      const std::shared_ptr<rosbag2_interfaces::srv::SubscribeTopics::Request> request,
+      std::shared_ptr<rosbag2_interfaces::srv::SubscribeTopics::Response> response)
+    {
+      try {
+        for (const auto & topic_name : request->topics) {
+          if (subscriptions_.find(topic_name) != subscriptions_.end() ||
+            this->subscribe_topic(topic_name))
+          {
+            response->subscribed_topics.push_back(topic_name);
+          } else {
+            response->unavailable_topics.push_back(topic_name);
+          }
+        }
+        set_service_success(response);
+      } catch (const std::exception & e) {
+        RCLCPP_ERROR(node->get_logger(), "Error during SubscribeTopics request: %s", e.what());
+        set_service_error(response, e.what());
+      }
+    });
+
+  srv_unsubscribe_topics_ = node->create_service<rosbag2_interfaces::srv::UnsubscribeTopics>(
+    "~/unsubscribe_topics",
+    [this](
+      const std::shared_ptr<rmw_request_id_t>/* request_header */,
+      const std::shared_ptr<rosbag2_interfaces::srv::UnsubscribeTopics::Request> request,
+      std::shared_ptr<rosbag2_interfaces::srv::UnsubscribeTopics::Response> response)
+    {
+      try {
+        for (const auto & topic_name : request->topics) {
+          if (this->unsubscribe_topic(topic_name)) {
+            response->unsubscribed_topics.push_back(topic_name);
+          }
+        }
+        set_service_success(response);
+      } catch (const std::exception & e) {
+        RCLCPP_ERROR(node->get_logger(), "Error during UnsubscribeTopics request: %s", e.what());
+        set_service_error(response, e.what());
+      }
     });
 }
 
@@ -1680,6 +1774,8 @@ void RecorderImpl::subscribe_topic(const rosbag2_storage::TopicMetadata & topic)
   if (subscriptions_.find(topic.name) != subscriptions_.end()) {
     return;
   }
+  // Allow re-subscribing to a previously excluded topic
+  topic_filter_->include_topic(topic.name);
   // Auto-detect transient-local topics when repeat_all_transient_local_depth is set
   if (record_options_.repeat_all_transient_local_depth > 0 &&
     record_options_.repeat_transient_local_messages.count(topic.name) == 0)
@@ -1740,6 +1836,80 @@ void RecorderImpl::subscribe_topic(const rosbag2_storage::TopicMetadata & topic)
   } else {
     writer_->remove_topic(topic);
   }
+}
+
+bool RecorderImpl::subscribe_topic(const std::string & topic_name)
+{
+  if (subscriptions_.find(topic_name) != subscriptions_.end()) {
+    return false;
+  }
+
+  auto endpoint_infos = node->get_publishers_info_by_topic(topic_name);
+  if (endpoint_infos.empty()) {
+    RCLCPP_WARN_STREAM(node->get_logger(),
+      "Cannot subscribe to topic '" << topic_name <<
+      "': no publishers found on the graph.");
+    return false;
+  }
+
+  const std::string topic_type = endpoint_infos[0].topic_type();
+  subscribe_topic(
+    {
+      0u,
+      topic_name,
+      topic_type,
+      record_options_.input_serialization_format,
+      offered_qos_profiles_for_topic(endpoint_infos),
+      type_description_hash_for_topic(endpoint_infos),
+    });
+
+  return subscriptions_.find(topic_name) != subscriptions_.end();
+}
+
+bool RecorderImpl::unsubscribe_topic(const std::string & topic_name)
+{
+  auto it = subscriptions_.find(topic_name);
+  if (it == subscriptions_.end()) {
+    return false;
+  }
+
+  subscriptions_.erase(it);
+  topic_filter_->exclude_topic(topic_name);
+
+  RCLCPP_INFO_STREAM(node->get_logger(),
+    "Unsubscribed from topic '" << topic_name << "'");
+  return true;
+}
+
+void RecorderImpl::set_topics(const std::vector<std::string> & topics)
+{
+  // Build desired set for O(1) lookups
+  std::unordered_set<std::string> desired(topics.begin(), topics.end());
+
+  // Unsubscribe from topics not in the desired set
+  std::vector<std::string> to_remove;
+  for (const auto & [topic_name, _] : subscriptions_) {
+    if (desired.find(topic_name) == desired.end()) {
+      to_remove.push_back(topic_name);
+    }
+  }
+  for (const auto & topic_name : to_remove) {
+    subscriptions_.erase(topic_name);
+  }
+
+  // Update the topic filter atomically
+  topic_filter_->set_topics(topics);
+
+  // Subscribe to topics in the desired set that are not yet subscribed
+  for (const auto & topic_name : topics) {
+    if (subscriptions_.find(topic_name) == subscriptions_.end()) {
+      subscribe_topic(topic_name);
+    }
+  }
+
+  RCLCPP_INFO_STREAM(node->get_logger(),
+    "Set topics: " << topics.size() << " desired, " <<
+    to_remove.size() << " removed, " << subscriptions_.size() << " active");
 }
 
 std::shared_ptr<rclcpp::GenericSubscription>
@@ -2113,6 +2283,21 @@ uint64_t Recorder::get_total_num_messages_lost_in_transport() const
 void Recorder::stop()
 {
   pimpl_->stop();
+}
+
+bool Recorder::subscribe_topic(const std::string & topic_name)
+{
+  return pimpl_->subscribe_topic(topic_name);
+}
+
+bool Recorder::unsubscribe_topic(const std::string & topic_name)
+{
+  return pimpl_->unsubscribe_topic(topic_name);
+}
+
+void Recorder::set_topics(const std::vector<std::string> & topics)
+{
+  pimpl_->set_topics(topics);
 }
 
 const std::unordered_set<std::string> &
