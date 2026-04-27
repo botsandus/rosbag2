@@ -1897,14 +1897,24 @@ void RecorderImpl::set_topics(const std::vector<std::string> & topics)
     subscriptions_.erase(topic_name);
   }
 
-  // Update the topic filter atomically
+  // Update the topic filter and record options atomically
   topic_filter_->set_topics(topics);
+  record_options_.topics = topics;
 
   // Subscribe to topics in the desired set that are not yet subscribed
   for (const auto & topic_name : topics) {
     if (subscriptions_.find(topic_name) == subscriptions_.end()) {
       subscribe_topic(topic_name);
     }
+  }
+
+  // If some topics couldn't be subscribed (no publishers yet), ensure discovery is running
+  // so they get picked up when publishers appear on the graph.
+  if (subscriptions_.size() < desired.size() && !discovery_running_.load()) {
+    RCLCPP_INFO_STREAM(node->get_logger(),
+      "Restarting discovery for " << (desired.size() - subscriptions_.size()) <<
+      " unavailable topic(s)");
+    start_discovery();
   }
 
   RCLCPP_INFO_STREAM(node->get_logger(),
