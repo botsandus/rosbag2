@@ -630,12 +630,10 @@ bool PlayerImpl::play()
               is_ready_to_play_from_queue_ = false;
               ready_to_play_from_queue_cv_.notify_all();
             }
-            readers_->seek(starting_time_);
-            // Before starting normal playback, publish the last message for each
-            // transient_local topic that was recorded before the start offset.
-            // This ensures latched data (e.g. /robot_description, static TFs) is
-            // available to subscribers even when playback starts partway through.
+            // Publish last transient_local messages before seeking to start offset so
+            // subscribers receive latched data even when playback starts mid-bag.
             publish_transient_local_messages_before_start_offset();
+            readers_->seek(starting_time_);
             progress_bar_->update(clock_->is_paused() ?
                                  PlayerStatus::PAUSED : PlayerStatus::RUNNING);
 
@@ -1357,9 +1355,6 @@ void PlayerImpl::publish_transient_local_messages_before_start_offset()
       "Publishing latched message for transient_local topic '%s'", topic_name.c_str());
     publish_message(msg);
   }
-
-  // Seek back to starting_time_ so normal playback begins from the right place
-  readers_->seek(starting_time_);
 }
 
 rcutils_time_point_value_t PlayerImpl::get_message_order_timestamp(
