@@ -19,6 +19,7 @@
 #include <regex>
 #include <string>
 #include <unordered_map>
+#include <unordered_set>
 #include <utility>
 #include <vector>
 #include <thread>
@@ -344,6 +345,14 @@ private:
   rcutils_time_point_value_t get_message_order_timestamp(
     const rosbag2_storage::SerializedBagMessageSharedPtr & message) const;
 
+  /// \brief Publish the last message for each transient_local topic that appears before the
+  /// start offset. This ensures latched topics (e.g. /robot_description, /map, static TFs)
+  /// are still published even when playback starts partway through the bag.
+  void publish_transient_local_messages_before_start_offset();
+
+  /// \brief Set of topic names that have TRANSIENT_LOCAL durability in their recorded QoS.
+  std::unordered_set<std::string> transient_local_topics_;
+
   static constexpr double read_ahead_lower_bound_percentage_ = 0.9;
   static const std::chrono::milliseconds queue_read_wait_period_;
   std::atomic_bool cancel_wait_for_next_message_{false};
@@ -621,6 +630,9 @@ bool PlayerImpl::play()
               is_ready_to_play_from_queue_ = false;
               ready_to_play_from_queue_cv_.notify_all();
             }
+            // Publish last transient_local messages before seeking to start offset so
+            // subscribers receive latched data even when playback starts mid-bag.
+            publish_transient_local_messages_before_start_offset();
             readers_->seek(starting_time_);
             progress_bar_->update(clock_->is_paused() ?
                                  PlayerStatus::PAUSED : PlayerStatus::RUNNING);
@@ -1293,6 +1305,58 @@ void PlayerImpl::play_messages_from_queue()
   ready_to_play_from_queue_cv_.notify_all();
 }
 
+void PlayerImpl::publish_transient_local_messages_before_start_offset()
+{
+  if (transient_local_topics_.empty() || play_options_.start_offset <= 0) {
+    return;
+  }
+
+  const rcutils_time_point_value_t earliest_time = readers_->get_earliest_timestamp();
+
+  // Nothing to pre-publish if starting_time_ hasn't moved past the bag start
+  if (starting_time_ <= earliest_time) {
+    return;
+  }
+
+  RCLCPP_INFO(
+    owner_->get_logger(),
+    "Collecting transient_local messages before start offset for %zu topic(s)...",
+    transient_local_topics_.size());
+
+  // Seek to the very beginning
+  readers_->seek(earliest_time);
+
+  // Read messages from the beginning up to starting_time_, keeping only the last
+  // message per transient_local topic
+  std::unordered_map<std::string, rosbag2_storage::SerializedBagMessageSharedPtr>
+    last_transient_local_msgs;
+
+  while (readers_->has_next()) {
+    auto msg = readers_->get_next_message_in_chronological_order();
+    if (msg == nullptr) {
+      break;
+    }
+
+    // Stop once we've reached the start offset position
+    if (get_message_order_timestamp(msg) >= starting_time_) {
+      break;
+    }
+
+    // If this message belongs to a transient_local topic, keep (or overwrite) it
+    if (transient_local_topics_.count(msg->topic_name) > 0) {
+      last_transient_local_msgs[msg->topic_name] = msg;
+    }
+  }
+
+  // Publish the collected transient_local messages
+  for (auto & [topic_name, msg] : last_transient_local_msgs) {
+    RCLCPP_INFO(
+      owner_->get_logger(),
+      "Publishing latched message for transient_local topic '%s'", topic_name.c_str());
+    publish_message(msg);
+  }
+}
+
 rcutils_time_point_value_t PlayerImpl::get_message_order_timestamp(
   const rosbag2_storage::SerializedBagMessageSharedPtr & message) const
 {
@@ -1608,6 +1672,21 @@ void PlayerImpl::prepare_publishers()
         std::shared_ptr<PlayerPublisher> player_pub =
           std::make_shared<PlayerPublisher>(std::move(pub), play_options_.disable_loan_message);
         publishers_.insert(std::make_pair(topic.name, player_pub));
+        // Track topics with TRANSIENT_LOCAL durability so we can replay their
+        // last message when using start_offset (they typically appear only at
+        // the beginning of the bag).
+        if (topic_qos.durability() == rclcpp::DurabilityPolicy::TransientLocal) {
+          transient_local_topics_.insert(topic.name);
+        } else {
+          // Also check the recorded QoS profiles — the adapted QoS may have
+          // fallen back to defaults even though the original was transient_local.
+          for (const auto & recorded_qos : topic.offered_qos_profiles) {
+            if (recorded_qos.durability() == rclcpp::DurabilityPolicy::TransientLocal) {
+              transient_local_topics_.insert(topic.name);
+              break;
+            }
+          }
+        }
         if (play_options_.wait_acked_timeout >= 0 &&
           topic_qos.reliability() == rclcpp::ReliabilityPolicy::BestEffort)
         {
