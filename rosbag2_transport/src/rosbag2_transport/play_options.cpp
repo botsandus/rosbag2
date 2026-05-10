@@ -54,6 +54,7 @@ Node convert<rosbag2_transport::PlayOptions>::encode(
   node["start_paused"] = play_options.start_paused;
   node["start_offset"] = YAML::convert<rclcpp::Duration>::encode(
     std::chrono::nanoseconds(play_options.start_offset));
+  node["repeat_latched_messages"] = play_options.repeat_latched_messages;
 
   node["disable_keyboard_controls"] = play_options.disable_keyboard_controls;
   node["wait_acked_timeout"] = YAML::convert<rclcpp::Duration>::encode(
@@ -106,6 +107,7 @@ bool convert<rosbag2_transport::PlayOptions>::decode(
   play_options.playback_until_timestamp = playback_until_timestamp.nanoseconds();
 
   optional_assign<bool>(node, "start_paused", play_options.start_paused);
+  optional_assign<bool>(node, "repeat_latched_messages", play_options.repeat_latched_messages);
 
   rclcpp::Duration start_offset(std::chrono::nanoseconds(play_options.start_offset));
   optional_assign<rclcpp::Duration>(node, "start_offset", start_offset);

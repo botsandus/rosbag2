@@ -1307,7 +1307,7 @@ void PlayerImpl::play_messages_from_queue()
 
 void PlayerImpl::publish_transient_local_messages_before_start_offset()
 {
-  if (transient_local_topics_.empty() || play_options_.start_offset <= 0) {
+  if (transient_local_topics_.empty() || !play_options_.repeat_latched_messages) {
     return;
   }
 

@@ -160,6 +160,12 @@ class PlayVerb(VerbExtension):
             '--start-offset', type=check_not_negative_float, default=0.0,
             help='Start the playback player this many seconds into the bag file.')
         parser.add_argument(
+            '--start-offset-repeat-latched', action='store_true', default=False,
+            help='When using --start-offset, republish the last recorded message for each '
+                 'transient_local (latched) topic that appears before the start offset, '
+                 'so subscribers receive essential latched data such as /robot_description '
+                 'or /tf_static even when playback starts mid-bag.')
+        parser.add_argument(
             '--wait-for-all-acked', type=check_not_negative_int, default=-1,
             help='Wait until all published messages are acknowledged by all subscribers or until '
                  'the timeout elapses in millisecond before play is terminated. '
@@ -326,6 +332,7 @@ class PlayVerb(VerbExtension):
         play_options.disable_keyboard_controls = args.disable_keyboard_controls
         play_options.start_paused = args.start_paused
         play_options.start_offset = args.start_offset
+        play_options.repeat_latched_messages = args.start_offset_repeat_latched
         play_options.wait_acked_timeout = args.wait_for_all_acked
         play_options.disable_loan_message = args.disable_loan_message
         play_options.publish_service_requests = args.publish_service_requests

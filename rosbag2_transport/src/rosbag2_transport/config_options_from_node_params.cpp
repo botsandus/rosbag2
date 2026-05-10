@@ -216,6 +216,9 @@ PlayOptions get_play_options_from_node_params(rclcpp::Node & node)
   play_options.start_offset = param_utils::get_duration_from_node_param(
     node, "play.start_offset", 0, 0).nanoseconds();
 
+  play_options.repeat_latched_messages =
+    node.declare_parameter<bool>("play.repeat_latched_messages", false);
+
   play_options.disable_keyboard_controls =
     node.declare_parameter<bool>("play.disable_keyboard_controls", false);
 

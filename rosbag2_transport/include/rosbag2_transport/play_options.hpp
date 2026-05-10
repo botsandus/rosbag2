@@ -121,6 +121,10 @@ public:
   // Time to start playback as an offset from the beginning of the bag.
   rcutils_time_point_value_t start_offset = 0;
 
+  // When true, publish the last recorded message for each transient_local topic that appears
+  // before the start offset, so latched data is available to subscribers from the start.
+  bool repeat_latched_messages = false;
+
   bool disable_keyboard_controls = false;
   // keybindings
   KeyboardHandler::KeyCode pause_resume_toggle_key = KeyboardHandler::KeyCode::SPACE;
